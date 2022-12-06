@@ -1,0 +1,50 @@
+trigger: none
+
+pr:  
+- develop
+- main
+
+pool:
+ name: '<poolname>' 
+ # any specific agent 
+ demands:
+  - agent.custom.python -equals true
+  
+stages:
+  - stage: Build
+    displayName: 'Build'
+
+    jobs:
+    - job: buildJob
+      workspace:
+        clean: all
+      steps:
+        #Publish pipeline artifact so following stages can use it
+        - task: PublishBuildArtifacts@1
+          inputs:
+            PathtoPublish: '$(System.DefaultWorkingDirectory)/htmlfolder'
+            ArtifactName: '$(pipelineArtifactName)'
+            publishLocation: 'Container'
+          displayName: 'Publish all Static HTML files'
+
+  - stage: Deploy
+    displayName: 'Deploy documentation'
+    dependsOn: Build
+    jobs:
+      - deployment: releaseJob
+        workspace:
+          clean: all    
+        pool: 
+          vmImage: ubuntu-latest
+        environment: "<ENV_NAME>"
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                - task: AzureStaticWebApp@0
+                  inputs:
+                    cwd: '$(Pipeline.Workspace)/$(pipelineArtifactName)'
+                    app_location: '/'
+                    skip_app_build: true
+                    skip_api_build: true
+                    azure_static_web_apps_api_token: '<StaticWebAppToken>'
